@@ -33,7 +33,7 @@ reset_terminal() {
 }
 
 extractMonthInfo() {
-	local date=$(date -d "${current_date%-*}-01 + $((1 + $offset)) month -1 day" '+%Y-%m-%d')
+	local date=$(date -d "${current_date%-*}-01 + $((1 + offset)) month -1 day" '+%Y-%m-%d')
 	
 	daysInMonth="${date##*-}"
 	local tmp="${date#*-}"
@@ -89,6 +89,9 @@ moveSelectionUp() {
 open() {
 	reset_terminal
 	local file=$(printf "${SAVE_LOCATION}/${year}-${month}-%02d.txt" "$line")
+	if [[ ! -f $file ]]; then
+		printf -- "-- %02d ${months[${month#0} - 1]} $year --" "$line" >> "$file"
+	fi
 	vim "$file"
 	setup_terminal
 	redrawScreen
