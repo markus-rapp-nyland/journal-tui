@@ -57,15 +57,15 @@ printDates() {
 		else
 			printf "${year}-${month}-%02d\n" "$day"
 		fi
-	done
+	done 
 	
 	printf "\e[%s;0H" $((line+1))
 }
 
 redrawScreen() {
 	# Clear the screen and move cursor to (0,0).
-    # This mimics the 'clear' command.
-    printf '\e[2J\e[H'
+    	# This mimics the 'clear' command.
+    	printf '\e[2J\e[H'
 	extractMonthInfo
 	printDates
 }
@@ -134,7 +134,7 @@ key()  {
 }
 
 main() {
-	# require SAVE_LOCATION to be sets
+ 	# require SAVE_LOCATION to be sets
 	if [[ -z $SAVE_LOCATION ]]; then
 		echo "Error: variable SAVE_LOCATION must be set"
 		exit 1
@@ -148,7 +148,7 @@ main() {
 
 	typeset -i line offset
 	offset=0
-	current_date=$(date '+%Y-%m-%d')
+	printf -v current_date '%(%Y-%m-%d)T'
 	line="${current_date##*-}"
 
 	# Trap the SIGWINCH signal (handle window resizes)
