@@ -149,7 +149,7 @@ main() {
 	typeset -i line offset
 	offset=0
 	printf -v current_date '%(%Y-%m-%d)T'
-	line="${current_date##*-}"
+	line=$(( 10#${current_date##*-} ))
 
 	# Trap the SIGWINCH signal (handle window resizes)
 	trap 'get_term_size; redrawScreen' WINCH
