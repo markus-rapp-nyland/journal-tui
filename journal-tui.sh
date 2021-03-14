@@ -12,8 +12,8 @@ setup_terminal() {
     # '\e[?7l':    Disable line wrapping.
     # '\e[?25l':   Hide the cursor.
     # '\e[2J':     Clear the screen.
-	# '\e[H':      Move cursor to 0,0
-    printf '\e[?1049h\e[?7l\e[?25l\e[2J\e[H'
+    # '\e[0;Nr':   Set scroll area from line 0 to the third last line on screen
+    printf '\e[?1049h\e[?7l\e[?25l\e[2J\e[0;%sr' "$((LINES - 3))"
 
     # Hide echoing of user input
     stty -echo
@@ -24,7 +24,7 @@ reset_terminal() {
     # '\e[?7h':   Re-enable line wrapping.
     # '\e[?25h':  Unhide the cursor.
     # '\e[2J':    Clear the terminal.
-	# '\e[H':     Move cursor to 0,0
+    # '\e[H':     Move cursor to 0,0
     # '\e[?1049l: Restore main screen buffer.
     printf '\e[?7h\e[?25h\e[2J\e[H\e[?1049l'
 
@@ -32,58 +32,23 @@ reset_terminal() {
     stty echo
 }
 
-extractMonthInfo() {
-	local date=$(date -d "${current_date%-*}-01 + $((1 + offset)) month -1 day" '+%Y-%m-%d')
-	
-	daysInMonth="${date##*-}"
-	local tmp="${date#*-}"
-	month="${tmp%-*}"
-	year="${date%%-*}"
-	
-	if ((line > daysInMonth)); then
-		line=daysInMonth
-	fi
+print_status_line() {
+	local status_line="(0/0) Week $selected_week $selected_year"
+	# '\e[%sH': 	Move cursor to specified line, in this case to the second to last line
+	# '\e[30;41m':	Set red background color
+	# '%*s': 	Fill the whole line with the red background color
+	# '\e[m':	Reset formatting
+	printf '\e[%sH\e[30;41m%*s\e[m' "$((LINES - 1))" "-$COLUMNS" "$status_line"
 }
 
-months=(January February Mars April May June July August September October November Desember)
-
-printDates() {
-	# remove leading 0 before aritmetric operation. Contant would otherwise be interpreted as an octal number.
-	echo "--- ${months[${month#0} - 1]} $year ---"
-  
-	for ((day=1;day<=daysInMonth;day++)); do
-		if ((day == line)); then
-			printf "\e[100m${year}-${month}-%02d\e[0m\n" "$day"
-		else
-			printf "${year}-${month}-%02d\n" "$day"
-		fi
-	done 
-	
-	printf "\e[%s;0H" $((line+1))
-}
-
-redrawScreen() {
-	# Clear the screen and move cursor to (0,0).
-    	# This mimics the 'clear' command.
-    	printf '\e[2J\e[H'
-	extractMonthInfo
-	printDates
-}
-
-moveSelectionDown() {
-	if ((line < daysInMonth)); then
-		printf "\e[%d;0H${year}-${month}-%02d" $((line+1)) "$line"
-		((line++))
-		printf "\e[%d;0H\e[100m${year}-${month}-%02d\e[0m" $((line+1)) "$line"
-	fi
-}
-
-moveSelectionUp() {
-	if ((line > 1)); then
-		printf "\e[%d;0H${year}-${month}-%02d" $((line+1)) "$line"
-		((line--))
-		printf "\e[%d;0H\e[100m${year}-${month}-%02d\e[0m" $((line+1)) "$line"
-	fi
+print_file() {
+    # %-V Non zero padded ISO-8601 week number
+    # %G Year corresponding to the ISO-8601 week number 
+    local tmp_date=$(date -d "+ $week_offset weeks" '+%-V-%G')
+    selected_week="${tmp_date%-*}"
+    selected_year="${tmp_date#*-}"
+    selected_week_file="week-${tmp_date}.txt"
+    printf "$selected_week_file \n"
 }
 
 open() {
@@ -107,13 +72,15 @@ key()  {
   case "${special_key:-$1}" in
 	# Right arrow or 'l'
     l|$'\e[C'|$'\eOC')
-      ((offset++))
-      redrawScreen
+      ((week_offset++))
+      print_file
+      print_status_line
     ;;
 	# Left arrow or 'h'
     h|$'\e[D'|$'\eOD')
-      ((offset--))
-      redrawScreen
+      ((week_offset--))
+      print_file
+      print_status_line
     ;;
 	# Down arrow or 'j'
 	j|$'\e[B'|$'\e[OB')
@@ -135,10 +102,10 @@ key()  {
 
 main() {
  	# require SAVE_LOCATION to be sets
-	if [[ -z $SAVE_LOCATION ]]; then
-		echo "Error: variable SAVE_LOCATION must be set"
-		exit 1
-	fi
+	#if [[ -z $SAVE_LOCATION ]]; then
+	#	echo "Error: variable SAVE_LOCATION must be set"
+	#	exit 1
+	#fi
 
 	# in later bash versions SIGWINCH does not interupt read commands
 	# this causes the window to not redraw itself on window resizes
@@ -146,10 +113,10 @@ main() {
 	((BASH_VERSINFO[0] > 3)) &&
 		extra_read_flags=(-t 0.05)
 
-	typeset -i line offset
-	offset=0
+	#set int type
+	typeset -i week_offset selected_week selected_year
+	week_offset=0
 	printf -v current_date '%(%Y-%m-%d)T'
-	line=$(( 10#${current_date##*-} ))
 
 	# Trap the SIGWINCH signal (handle window resizes)
 	trap 'get_term_size; redrawScreen' WINCH
@@ -158,7 +125,8 @@ main() {
 	trap 'reset_terminal' EXIT
 
 	setup_terminal
-	redrawScreen
+	print_file
+	print_status_line
 
 	# Vintage infinite loop.
 	for ((;;)); {
