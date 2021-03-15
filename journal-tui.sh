@@ -41,25 +41,46 @@ print_status_line() {
 	printf '\e[%sH\e[30;41m%*s\e[m' "$((LINES - 1))" "-$COLUMNS" "$status_line"
 }
 
-print_file() {
+get_file() {
     # %-V Non zero padded ISO-8601 week number
     # %G Year corresponding to the ISO-8601 week number 
     local tmp_date=$(date -d "+ $week_offset weeks" '+%-V-%G')
     selected_week="${tmp_date%-*}"
     selected_year="${tmp_date#*-}"
     selected_week_file="week-${tmp_date}.txt"
-    printf "$selected_week_file \n"
+    if [[ -f $selected_week_file ]]; then
+        mapfile -t file_array < "$selected_week_file"    
+    else
+        file_array=()
+    fi
+}
+
+print_file() {
+    if [[ ${#file_array[@]} -eq 0 ]]; then
+        printf "No notes for this week yet, press 'enter' to create one"
+    else
+	local scroll_end="$((LINES - 3 < 0 ? 0 : LINES -3 ))"
+	for ((i=0;i<scroll_end;i++)); {
+		printf '\e[%sH%s' "$(( i + 1 ))" "${file_array[$i]}"
+	}
+    fi
+}
+
+redraw_screen() {
+    # Clear the screen and move cursor to (0,0)
+    printf '\e[2J\e[H'
+    get_file
+    print_file
+    print_status_line
 }
 
 open() {
-	reset_terminal
-	local file=$(printf "${SAVE_LOCATION}/${year}-${month}-%02d.txt" "$line")
-	if [[ ! -f $file ]]; then
-		printf -- "-- %02d ${months[${month#0} - 1]} $year --" "$line" >> "$file"
-	fi
-	vim "$file"
-	setup_terminal
-	redrawScreen
+    reset_terminal
+    vim "$selected_week_file"
+    setup_terminal
+    get_file
+    print_file
+    print_status_line	
 }
 
 key()  {
@@ -73,14 +94,12 @@ key()  {
 	# Right arrow or 'l'
     l|$'\e[C'|$'\eOC')
       ((week_offset++))
-      print_file
-      print_status_line
+      redraw_screen
     ;;
 	# Left arrow or 'h'
     h|$'\e[D'|$'\eOD')
       ((week_offset--))
-      print_file
-      print_status_line
+      redraw_screen
     ;;
 	# Down arrow or 'j'
 	j|$'\e[B'|$'\e[OB')
@@ -125,6 +144,7 @@ main() {
 	trap 'reset_terminal' EXIT
 
 	setup_terminal
+	get_file
 	print_file
 	print_status_line
 
