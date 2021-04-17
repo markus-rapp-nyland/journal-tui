@@ -138,11 +138,12 @@ main() {
 	printf -v current_date '%(%Y-%m-%d)T'
 
 	# Trap the SIGWINCH signal (handle window resizes)
-	trap 'get_term_size; redrawScreen' WINCH
+	trap 'get_term_size; redraw_screen' WINCH
   
 	# Trap the exit signal (we need to reset the terminal to a useable state.)
 	trap 'reset_terminal' EXIT
 
+	get_term_size
 	setup_terminal
 	get_file
 	print_file
