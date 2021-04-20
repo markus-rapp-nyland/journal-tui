@@ -32,15 +32,6 @@ reset_terminal() {
     stty echo
 }
 
-print_status_line() {
-	local status_line="(0/0) Week $selected_week $selected_year"
-	# '\e[%sH': 	Move cursor to specified line, in this case to the second to last line
-	# '\e[30;41m':	Set red background color
-	# '%*s': 	Fill the whole line with the red background color
-	# '\e[m':	Reset formatting
-	printf '\e[%sH\e[30;41m%*s\e[m' "$((LINES - 1))" "-$COLUMNS" "$status_line"
-}
-
 get_file() {
     # %-V Non zero padded ISO-8601 week number
     # %G Year corresponding to the ISO-8601 week number 
@@ -49,29 +40,40 @@ get_file() {
     selected_year="${tmp_date#*-}"
     selected_week_file="week-${tmp_date}.txt"
     if [[ -f $selected_week_file ]]; then
-        mapfile -t file_array < "$selected_week_file"    
+        mapfile -t file_array < "$selected_week_file"
     else
         file_array=()
     fi
+	lines_in_file="${#file_array[@]}"
 }
 
 print_file() {
-    if [[ ${#file_array[@]} -eq 0 ]]; then
+    if [[ $lines_in_file -eq 0 ]]; then
         printf "No notes for this week yet, press 'enter' to create one"
     else
-	local scroll_end="$((LINES - 3 < 0 ? 0 : LINES -3 ))"
+	first_line_on_screen="$((1 + $line_offset))"
+	scroll_end="$((LINES - 3 < 0 ? 0 : LINES -3 ))" #move out for performance
+	last_line_on_screen="$((line_offset + scroll_end < lines_in_file ? line_offset + scroll_end : lines_in_file))"
 	for ((i=0;i<scroll_end;i++)); {
 		printf '\e[%sH%s' "$(( i + 1 ))" "${file_array[$i]}"
 	}
     fi
 }
 
+print_status_line() {
+	local status_line=" (${first_line_on_screen}/${last_line_on_screen}:${lines_in_file}) Week $selected_week $selected_year"
+	# '\e[%sH': 	Move cursor to specified line, in this case to the second to last line
+	# '\e[30;41m':	Set red background color
+	# '%*s': 	Fill the whole line with the red background color
+	# '\e[m':	Reset formatting
+	printf '\e[%sH\e[30;41m%*s\e[m' "$((LINES - 1))" "-$COLUMNS" "$status_line"
+}
+
 redraw_screen() {
-    # Clear the screen and move cursor to (0,0)
-    printf '\e[2J\e[H'
-    get_file
-    print_file
-    print_status_line
+	# Clear the screen and move cursor to (0,0)
+	printf '\e[2J\e[H'
+	print_file
+	print_status_line
 }
 
 open() {
@@ -80,7 +82,7 @@ open() {
     setup_terminal
     get_file
     print_file
-    print_status_line	
+    print_status_line
 }
 
 key()  {
@@ -92,48 +94,59 @@ key()  {
 
   case "${special_key:-$1}" in
 	# Right arrow or 'l'
-    l|$'\e[C'|$'\eOC')
-      ((week_offset++))
-      redraw_screen
-    ;;
+	l|$'\e[C'|$'\eOC')
+		((week_offset++))
+		get_file
+		redraw_screen
+	;;
 	# Left arrow or 'h'
-    h|$'\e[D'|$'\eOD')
-      ((week_offset--))
-      redraw_screen
-    ;;
+	h|$'\e[D'|$'\eOD')
+		((week_offset--))
+		get_file
+		redraw_screen
+	;;
 	# Down arrow or 'j'
 	j|$'\e[B'|$'\e[OB')
-		moveSelectionDown
-    ;;
+		# Only scroll down if more content below
+		if (( line_offset + scroll_end < lines_in_file )); then
+			((line_offset++))
+			redraw_screen
+		fi
+	;;
 	# Up arrow or 'k'
 	k|$'\e[A'|$'\e[OA')
-		moveSelectionUp
-    ;;
+		# Only scroll up if more content above
+		if [[ $line_offset -ne 0 ]]; then
+			((line_offset--))
+			redraw_screen
+		fi
+	;;
 	# Enter
 	'')
 		open
 	;;
-    q)
-      exit
-    ;;
+	q)
+		exit
+	;;
   esac
 }
 
 main() {
- 	# require SAVE_LOCATION to be sets
+	# require SAVE_LOCATION to be sets
 	#if [[ -z $SAVE_LOCATION ]]; then
 	#	echo "Error: variable SAVE_LOCATION must be set"
 	#	exit 1
 	#fi
 
-	# in later bash versions SIGWINCH does not interupt read commands
+	# in later bash versions SIGWINCH does not interrupt read commands
 	# this causes the window to not redraw itself on window resizes
 	# solution is to add a small timeout to the read so that SIGWINCH can sneak past  
 	((BASH_VERSINFO[0] > 3)) &&
 		extra_read_flags=(-t 0.05)
 
 	#set int type
-	typeset -i week_offset selected_week selected_year
+	typeset -i line_offset week_offset selected_week selected_year
+	line_offset=0
 	week_offset=0
 	printf -v current_date '%(%Y-%m-%d)T'
 
