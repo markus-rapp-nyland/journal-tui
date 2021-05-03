@@ -38,9 +38,9 @@ get_file() {
     local tmp_date=$(date -d "+ $week_offset weeks" '+%-V-%G')
     selected_week="${tmp_date%-*}"
     selected_year="${tmp_date#*-}"
-    selected_week_file="week-${tmp_date}.txt"
-    if [[ -f $selected_week_file ]]; then
-        mapfile -t file_array < "$selected_week_file"
+    selected_file="${SAVE_LOCATION}/week-${tmp_date}.txt"
+    if [[ -f $selected_file ]]; then
+        mapfile -t file_array < "$selected_file"
     else
         file_array=()
     fi
@@ -48,16 +48,17 @@ get_file() {
 }
 
 print_file() {
-    if [[ $lines_in_file -eq 0 ]]; then
-        printf "No notes for this week yet, press 'enter' to create one"
-    else
+	if [[ $lines_in_file -eq 0 ]]; then
+		printf "No notes for this week yet, press 'enter' to create one"
+	else
 	first_line_on_screen="$((1 + $line_offset))"
 	scroll_end="$((LINES - 3 < 0 ? 0 : LINES -3 ))" #move out for performance
 	last_line_on_screen="$((line_offset + scroll_end < lines_in_file ? line_offset + scroll_end : lines_in_file))"
+	# Print each line in scroll area
 	for ((i=0;i<scroll_end;i++)); {
-		printf '\e[%sH%s' "$(( i + 1 ))" "${file_array[$i]}"
+		printf '\e[%iH%s' "$((i + 1))" "${file_array[((i + line_offset))]}"
 	}
-    fi
+	fi
 }
 
 print_status_line() {
@@ -78,7 +79,7 @@ redraw_screen() {
 
 open() {
     reset_terminal
-    vim "$selected_week_file"
+    vim "$selected_file"
     setup_terminal
     get_file
     print_file
@@ -132,11 +133,11 @@ key()  {
 }
 
 main() {
-	# require SAVE_LOCATION to be sets
-	#if [[ -z $SAVE_LOCATION ]]; then
-	#	echo "Error: variable SAVE_LOCATION must be set"
-	#	exit 1
-	#fi
+	# require SAVE_LOCATION to be set
+	if [[ -z $SAVE_LOCATION ]]; then
+		echo "Error: variable SAVE_LOCATION must be set"
+		exit 1
+	fi
 
 	# in later bash versions SIGWINCH does not interrupt read commands
 	# this causes the window to not redraw itself on window resizes
