@@ -82,7 +82,14 @@ redraw_screen() {
 
 open() {
     reset_terminal
-    vim "$selected_file"
+
+    if [[ -f $selected_file ]]; then
+        vim "$selected_file"
+    else
+        header="[Week $selected_week $selected_year]"
+        vim "+put ='$header'" "$selected_file"
+    fi
+
     setup_terminal
     get_file
     print_file
