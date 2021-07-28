@@ -51,6 +51,8 @@ get_file() {
 print_file() {
 	if [[ $lines_in_file -eq 0 ]]; then
 		printf "No notes for this week yet, press 'enter' to create one"
+		first_line_on_screen=0
+		last_line_on_screen=0
 	else
 	first_line_on_screen="$((1 + line_offset))"
 	scroll_end="$((LINES - 3 < 0 ? 0 : LINES -3 ))" #move out for performance
