@@ -35,6 +35,7 @@ reset_terminal() {
 get_file() {
     # %-V Non zero padded ISO-8601 week number
     # %G Year corresponding to the ISO-8601 week number 
+    # shellcheck disable=SC2155
     local tmp_date=$(date -d "+ $week_offset weeks" '+%-V-%G')
     selected_week="${tmp_date%-*}"
     selected_year="${tmp_date#*-}"
@@ -51,7 +52,7 @@ print_file() {
 	if [[ $lines_in_file -eq 0 ]]; then
 		printf "No notes for this week yet, press 'enter' to create one"
 	else
-	first_line_on_screen="$((1 + $line_offset))"
+	first_line_on_screen="$((1 + line_offset))"
 	scroll_end="$((LINES - 3 < 0 ? 0 : LINES -3 ))" #move out for performance
 	last_line_on_screen="$((line_offset + scroll_end < lines_in_file ? line_offset + scroll_end : lines_in_file))"
 	# Print each line in scroll area
@@ -89,7 +90,7 @@ open() {
 key()  {
   # Handle special key presses
   if [[ $1 == $'\e' ]]; then
-	read "${read_flags[@]}" -rsn 2 
+	read -rsn 2
 	local special_key="${1}${REPLY}"
   fi
 
@@ -149,12 +150,11 @@ main() {
 	typeset -i line_offset week_offset selected_week selected_year
 	line_offset=0
 	week_offset=0
-	printf -v current_date '%(%Y-%m-%d)T'
 
 	# Trap the SIGWINCH signal (handle window resizes)
 	trap 'get_term_size; redraw_screen' WINCH
   
-	# Trap the exit signal (we need to reset the terminal to a useable state.)
+	# Trap the exit signal (resets the terminal to a usable state.)
 	trap 'reset_terminal' EXIT
 
 	get_term_size
